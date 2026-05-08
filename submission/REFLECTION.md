@@ -1,6 +1,6 @@
 # Reflection — Lab 22 (DPO/ORPO Alignment)
 
-**Tên:** _Nhữ Gia Bách - 2A202600248
+**Tên:** _Nhữ Gia Bách - 2A202600248_
 **Tier đã chạy:** _T4_
 **Date:** _2026-05-08_
 
@@ -36,9 +36,11 @@
 
 ---
 
-Dựa trên kết quả chạy, Reward gap của mô hình đã tăng nhẹ lên mức +0.043 vào cuối quá trình training. Khi phân tích kỹ hơn, ta thấy `chosen_rewards` đạt mức 0.026 trong khi `rejected_rewards` giảm xuống -0.017. Điều này cho thấy thuật toán DPO đã bắt đầu thực hiện việc "căn chỉnh" bằng cách đẩy xác suất của các câu trả lời tốt lên và hạ thấp các câu trả lời kém hơn. 
+## 3. Reward curves analysis
 
-Tuy nhiên, con số gap +0.043 là khá nhỏ, cho thấy sự khác biệt giữa hai phân phối chưa thực sự lớn sau 1 epoch với tập dữ liệu 2000 pairs. Đường cong reward bắt đầu có xu hướng tách biệt rõ hơn từ sau step 100, phù hợp với lý thuyết về việc mô hình cần một khoảng thời gian warmup để bắt đầu học được cấu trúc ưu tiên. Kết quả này xác nhận DPO đang hoạt động đúng hướng nhưng có thể cần thêm epoch hoặc dữ liệu chất lượng cao hơn để đạt được sự bứt phá mạnh mẽ về win-rate.
+Reward curves của mình cho thấy DPO đi đúng hướng, nhưng mức tác động còn vừa phải. Ở cuối training, reward gap đạt khoảng `+0.043`. Trong cùng thời điểm đó, `chosen_rewards` nằm quanh `0.026` còn `rejected_rewards` rơi xuống `-0.017`. Mình đọc tín hiệu này như sau: mô hình đã bắt đầu phân biệt được đáp án nên ưu tiên và đáp án nên tránh, nhưng biên độ vẫn chưa đủ lớn để gọi là một cú “bẻ lái” rõ ràng.
+
+Điều đáng nhớ nhất là đường cong không tách mạnh ngay từ đầu. Nó chỉ bắt đầu rõ hơn sau khoảng step 100, nên mình có cảm giác DPO cần một đoạn “lăn bánh” trước khi preference signal đi vào trọng số đủ rõ để nhìn thấy bằng mắt. Nói ngắn gọn, pipeline không sai, nhưng trong setup này nó vẫn khá hiền. Nếu được làm lại, mình muốn thử thêm epoch hoặc làm sạch preference data kỹ hơn để xem reward gap có nở ra rõ hơn không.
 
 ---
 
@@ -63,23 +65,27 @@ Tuy nhiên, con số gap +0.043 là khá nhỏ, cho thấy sự khác biệt gi�
 
 ---
 
-Tôi dự đoán rằng khi giảm β xuống 0.05, mô hình sẽ trở nên linh hoạt hơn và Reward gap có thể tăng nhanh hơn do mô hình ít bị ràng buộc bởi mô hình tham chiếu (reference model). Tuy nhiên, điều này có thể dẫn đến việc mô hình bị "overfit" vào tập dữ liệu preference, làm giảm khả năng tổng quát hóa hoặc gây ra hiện tượng lặp từ. Ngược lại, nếu tăng β lên 0.5, mô hình sẽ bám rất sát vào SFT gốc, dẫn đến việc căn chỉnh diễn ra chậm và an toàn hơn, nhưng có thể không cải thiện được nhiều về win-rate so với baseline.
+## 5. β trade-off
+
+Nếu hạ `β` xuống quanh `0.05`, mình kỳ vọng model sẽ “dám đi xa” hơn khỏi reference model. Đổi lại, reward gap có thể tăng nhanh hơn, nhưng rủi ro cũng tăng: model dễ bám preference data quá sát, sinh output thiếu ổn định, hoặc lặp ý khi gặp prompt lạ.
+
+Ở hướng ngược lại, nếu nâng `β` lên `0.5`, model sẽ bị giữ gần SFT gốc hơn. Cách đó an toàn hơn và ít làm hỏng hành vi ban đầu, nhưng alignment sẽ chậm lại và win-rate có thể không nhích nhiều. Với run này, mình vẫn nghiêng về vùng `β` thấp-vừa vì preference set không quá lớn; ở đây, mục tiêu không phải đi xa nhất mà là chỉnh đủ nhiều mà không bẻ model quá mạnh.
 
 ---
 
-Quyết định quan trọng nhất mà tôi đưa ra trong Lab này là việc lựa chọn tập dữ liệu Preference (argilla/ultrafeedback-binarized-preferences-cleaned) với kích thước 2000 pairs. 
+## 6. Personal reflection
 
-Lúc đầu, tôi đã cân nhắc việc sử dụng một tập dữ liệu nhỏ hơn (khoảng 500 pairs) để tiết kiệm thời gian training trên T4. Tuy nhiên, qua tìm hiểu lý thuyết, tôi nhận thấy DPO rất nhạy cảm với chất lượng và số lượng dữ liệu preference; nếu dữ liệu quá ít, mô hình sẽ không đủ tín hiệu để điều chỉnh xác suất giữa các cặp chosen/rejected một cách ổn định. 
+Quyết định có ảnh hưởng lớn nhất trong lab này là mình giữ preference slice ở mức 2000 pairs thay vì rút về khoảng 500 pairs để tiết kiệm thời gian trên T4. Ban đầu mình cũng cân nhắc phương án nhỏ hơn vì nó nhẹ và an toàn hơn về VRAM. Nhưng càng đọc DPO, mình càng thấy nếu dữ liệu preference quá ít thì tín hiệu chosen/rejected sẽ rất mỏng, khiến reward curve chỉ nhích nhẹ thay vì tách ra đủ rõ để thuyết phục.
 
-Kết quả cho thấy dù Reward gap chỉ tăng nhẹ, nhưng mô hình đã bắt đầu thể hiện sự thay đổi trong cách phản hồi các câu hỏi về safety và helpfulness. Nếu redid lab này vào ngày mai, tôi sẽ thử nghiệm với giá trị β nhỏ hơn (ví dụ 0.05) để xem liệu mô hình có thể bứt phá mạnh mẽ hơn về win-rate trong cùng một khoảng thời gian training hay không, đồng thời tăng số lượng epoch lên 2 để củng cố việc căn chỉnh.
+Nhìn lại kết quả, mình thấy lựa chọn đó là đúng. Gap không bùng mạnh, nhưng model đã đổi tone khá rõ ở một số prompt safety và helpfulness. Nếu làm lại từ đầu, mình muốn thử run với `β=0.05` và 2 epoch để xem alignment có bật mạnh hơn không. Mình cũng muốn thử một preference set được làm sạch hơn, vì sau lab này mình thấy chất lượng dữ liệu và hyperparameter gần như quan trọng ngang nhau.
 
 ---
 
-Dựa trên bảng kết quả benchmark (dù có nhiều giá trị nan do lỗi môi trường chạy lm-eval), tôi nhận thấy giá trị AlpacaEval-lite win-rate duy trì ở mức 0.500. Điều này cho thấy quá trình DPO chưa gây ra hiện tượng "Alignment Tax" nghiêm trọng làm suy giảm khả năng ngôn ngữ chung của mô hình Qwen2.5-3B. 
+## 7. Benchmark interpretation
 
-Mô hình vẫn giữ được sự ổn định tương đương với bản SFT baseline. Tuy nhiên, sự thiếu hụt các chỉ số về GSM8K hay MMLU khiến việc đánh giá hiện tượng "catastrophic forgetting" trở nên khó khăn. Tôi dự đoán rằng với mức gap reward nhỏ như hiện tại, khả năng giải toán hay kiến thức factual của mô hình sẽ không bị ảnh hưởng nhiều. 
+Phần benchmark khiến mình yên tâm nhất là AlpacaEval-lite vẫn đứng ở mức `0.500`. Nói cách khác, DPO không kéo model tụt xuống ở khía cạnh hội thoại chung. Dù bảng benchmark còn nhiều ô `nan` vì lỗi môi trường `lm-eval`, riêng tín hiệu này vẫn đủ để mình kết luận rằng alignment tax trong run này chưa xuất hiện ở mức đáng lo.
 
-Điểm đáng ngạc nhiên nhất là dù các chỉ số benchmark tự động không thay đổi nhiều, nhưng khi đánh giá thủ công (Manual SBS), tôi đã thấy sự cải thiện rõ rệt trong việc trình bày các câu trả lời ngắn gọn và đi thẳng vào vấn đề hơn. Điều này khẳng định rằng đôi khi các benchmark tự động không phản ánh hết được sự thay đổi tinh tế mà con người cảm nhận được sau quá trình căn chỉnh.
+Điều mình thấy thú vị là benchmark tự động không thay đổi nhiều, nhưng manual SBS lại cho cảm giác model gọn hơn, bớt vòng vo hơn. Vì vậy, mình hiểu run này như một bước chạm vào style trả lời trước, rồi mới nghĩ đến chuyện tạo khác biệt lớn ở các chỉ số cứng như GSM8K hay MMLU. Do hai benchmark đó chưa có đủ số liệu, mình không kết luận về catastrophic forgetting; mình chỉ xem đây là một run alignment khá nhẹ tay và tương đối ổn định.
 
 ---
 
